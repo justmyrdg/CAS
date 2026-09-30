@@ -1,0 +1,391 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  DEAN
+  INSTRUCTOR
+  STUDENT
+}
+
+enum UserPrefix {
+  MR
+  MS
+  DR
+  ENGR
+  PROF
+  ASST_PROF
+  ASSOC_PROF
+}
+
+enum UserPosition {
+  FULL_TIME
+  PART_TIME
+}
+
+enum EnrollmentSource {
+  JOIN_CODE
+  MANUAL
+}
+
+enum Term {
+  FIRST_SEM
+  SECOND_SEM
+  SUMMER
+}
+
+// Shared identity table for every app (admin-web, instructor-web,
+// student-mobile). Only ADMIN/DEAN auth + account management is wired up
+// today; INSTRUCTOR/STUDENT are modeled now so later work doesn't need a
+// migration to add the role.
+model User {
+  id                 String        @id @default(uuid())
+  email              String        @unique
+  passwordHash       String
+  firstName          String
+  middleName         String?
+  lastName           String
+  prefix             UserPrefix?
+  position           UserPosition?
+  role               UserRole
+  employeeId         String?       @unique
+  srCode             String?       @unique
+  isActive           Boolean       @default(true)
+  mustChangePassword Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  createdById String?
+  createdBy   User?   @relation("AccountsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAccounts User[]             @relation("AccountsCreated")
+  refreshTokens   RefreshToken[]
+  classesTaught   Class[]
+  enrollments     Enrollment[]
+  lessonsDone     LessonCompletion[]
+  quizAttempts    QuizAttempt[]
+  assessmentAttempts AssessmentAttempt[]
+
+  @@map("users")
+}
+
+// Refresh tokens are stored hashed and revocable, so disabling a user
+// (isActive = false) or an explicit logout can kill a session without
+// waiting for the token to expire on its own.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// A class section an instructor runs. subjectCode/subjectName are copied
+// from the Subject when the class is created, so a class keeps displaying
+// even for classes created before subjects existed (subjectId null).
+model Class {
+  id          String   @id @default(uuid())
+  subjectCode String
+  subjectName String
+  subjectId   String?
+  // Restrict: a subject that classes are running can't be deleted out from under them.
+  subject     Subject? @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  section     String
+  term        Term
+  schoolYear  String // e.g. "2026-2027"
+  joinCode    String   @unique
+  isArchived  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  instructorId String
+  instructor   User   @relation(fields: [instructorId], references: [id], onDelete: Cascade)
+
+  enrollments Enrollment[]
+  assessments Assessment[]
+
+  // No cap on how many classes an instructor runs — this only stops the
+  // exact same section being created twice for the same term.
+  @@unique([instructorId, subjectCode, section, term, schoolYear])
+  @@index([instructorId])
+  @@index([subjectId])
+  @@map("classes")
+}
+
+// A student's membership in a class — created when a student joins with the
+// class's join code, or when the instructor adds them by SR code.
+model Enrollment {
+  id        String           @id @default(uuid())
+  source    EnrollmentSource
+  createdAt DateTime         @default(now())
+
+  classId   String
+  class     Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentId String
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentId])
+  @@index([studentId])
+  @@map("enrollments")
+}
+
+// Admin-managed course catalog: Subject -> Module -> Chapter. Modules and
+// chapters are ordered by `position` (0-based, contiguous within a parent);
+// it isn't @@unique so a reorder can rewrite positions in any order.
+model Subject {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  modules  Module[]
+  classes  Class[]
+  arModels ArModel[]
+
+  @@map("subjects")
+}
+
+model Module {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  position    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subjectId String
+  subject   Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  chapters  Chapter[]
+
+  @@index([subjectId, position])
+  @@map("modules")
+}
+
+model Chapter {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  position    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  moduleId String
+  module   Module        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  items    ContentItem[]
+
+  @@index([moduleId, position])
+  @@map("chapters")
+}
+
+enum ContentType {
+  LESSON
+  QUIZ
+}
+
+// What a chapter is made of: lessons and quizzes interleaved in one ordered
+// list (position is 0-based within the chapter). A LESSON uses `blocks`; a QUIZ
+// uses `questions`.
+model ContentItem {
+  id        String      @id @default(uuid())
+  type      ContentType
+  title     String
+  // Lesson content as an ordered list of blocks (see src/utils/lessonBlocks.ts). Null for quizzes.
+  blocks    Json?
+  position  Int
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  chapterId String
+  chapter   Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  questions QuizQuestion[]
+
+  // Optional 3D model students can open from a lesson.
+  arModelId String?
+  arModel   ArModel? @relation(fields: [arModelId], references: [id], onDelete: SetNull)
+
+  completions LessonCompletion[]
+  attempts    QuizAttempt[]
+
+  @@index([chapterId, position])
+  @@map("content_items")
+}
+
+// A multiple-choice question: `choices` in display order, `correctChoice` is
+// the 0-based index of the right one.
+model QuizQuestion {
+  id            String   @id @default(uuid())
+  prompt        String
+  choices       String[]
+  correctChoice Int
+  position      Int
+
+  quizId String
+  quiz   ContentItem @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([quizId, position])
+  @@map("quiz_questions")
+}
+
+// ---------- Student progress ----------
+
+// A student has finished reading a lesson. One row per student per lesson.
+model LessonCompletion {
+  id          String   @id @default(uuid())
+  completedAt DateTime @default(now())
+
+  studentId String
+  student   User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId  String
+  lesson    ContentItem @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, lessonId])
+  @@index([lessonId])
+  @@map("lesson_completions")
+}
+
+// One submission of a quiz. `answers` holds the chosen choice index per
+// question (in question order at the time); score/total are stored so results
+// survive later edits to the quiz.
+model QuizAttempt {
+  id          String   @id @default(uuid())
+  answers     Int[]
+  score       Int
+  total       Int
+  submittedAt DateTime @default(now())
+
+  studentId String
+  student   User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  quizId    String
+  quiz      ContentItem @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, quizId])
+  @@index([quizId])
+  @@map("quiz_attempts")
+}
+
+// ---------- Class quizzes & exams (instructor-made) ----------
+
+enum AssessmentKind {
+  QUIZ
+  EXAM
+}
+
+// A quiz or exam an instructor builds for one of their classes (separate from the admin catalog's chapter quizzes).
+// Questions of any type live in `questions` — validated and graded by src/utils/assessmentQuestions.ts.
+model Assessment {
+  id               String         @id @default(uuid())
+  kind             AssessmentKind
+  title            String
+  instructions     String?
+  questions        Json           @default("[]")
+  timeLimitMinutes Int? // null = untimed
+  maxAttempts      Int? // null = unlimited
+  opensAt          DateTime? // students can start from…
+  closesAt         DateTime? // …until
+  showAnswers      Boolean        @default(true) // students see the correct answers after submitting
+  published        Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  classId  String
+  class    Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  attempts AssessmentAttempt[]
+
+  @@index([classId])
+  @@map("assessments")
+}
+
+// One student's try at an assessment. Started when they begin (the time limit runs from startedAt); answers,
+// per-question results and the score are filled in on submit. Essays wait for the instructor (needsGrading).
+model AssessmentAttempt {
+  id           String    @id @default(uuid())
+  startedAt    DateTime  @default(now())
+  submittedAt  DateTime?
+  answers      Json      @default("{}") // { [questionId]: answer }
+  results      Json      @default("{}") // { [questionId]: { points, graded, feedback? } }
+  score        Float?
+  maxScore     Float
+  needsGrading Boolean   @default(false)
+
+  studentId    String
+  student      User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId, studentId])
+  @@index([studentId])
+  @@map("assessment_attempts")
+}
+
+// ---------- AR library ----------
+
+// An uploaded 3D model (.glb or .gltf) stored on the backend's disk under
+// uploads/ar/<storedName>. Lessons link to it; deleting it just unlinks them.
+model ArModel {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  fileName    String // original upload name
+  storedName  String   @unique
+  mimeType    String
+  sizeBytes   Int
+  // Points of interest on the model: [{ id, position: [x,y,z], normal: [x,y,z], title, description }] in the
+  // model's own (glTF) coordinates — validated by src/utils/arHotspots.ts.
+  hotspots    Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subjectId String?
+  subject   Subject?      @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  lessons   ContentItem[]
+  triggers  ArTrigger[]
+
+  @@index([subjectId])
+  @@map("ar_models")
+}
+
+// A picture that makes the student AR camera show its model (e.g. the brain diagram in a lesson). The admin's
+// browser compiles it with MindAR; the image and its tracking data (.mind) live in backend/uploads/ar-triggers.
+model ArTrigger {
+  id         String   @id @default(uuid())
+  imageName  String   @unique
+  targetName String   @unique
+  width      Int
+  height     Int
+  createdAt  DateTime @default(now())
+
+  arModelId String
+  arModel   ArModel @relation(fields: [arModelId], references: [id], onDelete: Cascade)
+
+  @@index([arModelId])
+  @@map("ar_triggers")
+}
+
+// ---------- Lesson images ----------
+
+// An image uploaded for a lesson's image block, stored on disk under
+// uploads/images/<storedName>. Referenced from content_items.blocks by id and
+// deleted once no lesson uses it any more.
+model LessonImage {
+  id         String   @id @default(uuid())
+  fileName   String // original upload name
+  storedName String   @unique
+  mimeType   String
+  sizeBytes  Int
+  createdAt  DateTime @default(now())
+
+  @@map("lesson_images")
+}

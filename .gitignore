@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+.vscode/
+.DS_Store
+.worktrees/
+
+# Plain-text dev logins written by backend `npm run seed`
+DEFAULT_ACCOUNTS.txt
