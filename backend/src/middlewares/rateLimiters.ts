@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 // Only failed attempts count: many people signing in from one address
 // (a school lab behind one NAT, or the same dev machine) never trip it.
 export const loginRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 60 * 1000,
   limit: 10,
   skipSuccessfulRequests: true,
   standardHeaders: true,
