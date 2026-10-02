@@ -68,6 +68,7 @@ export interface QuizBest {
   score: number;
   total: number;
   attempts: number;
+  firstAt: Date;
   lastAt: Date;
 }
 
@@ -112,6 +113,7 @@ export async function loadProgress(studentIds: string[], itemIds: string[]): Pro
       score: better ? a.score : prev!.score,
       total: better ? a.total : prev!.total,
       attempts: (prev?.attempts ?? 0) + 1,
+      firstAt: prev && prev.firstAt < a.submittedAt ? prev.firstAt : a.submittedAt,
       lastAt: prev && prev.lastAt > a.submittedAt ? prev.lastAt : a.submittedAt,
     });
     touch(p, a.submittedAt);

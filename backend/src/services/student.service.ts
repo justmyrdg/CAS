@@ -5,6 +5,9 @@ import { fullName } from '../utils/fullName';
 import { presentBlocks } from '../utils/lessonBlocks';
 import { annotateOutline, isItemUnlocked, loadOutline, loadProgress, outlineItems, summarize } from './progress.service';
 import { trendStart, weeklyTrend } from '../utils/activityTrend';
+import { termEnd } from '../utils/predictive';
+import { studentRecommendations } from '../utils/prescriptive';
+import { forecastStudent, loadAssessmentStats } from './classAnalytics.service';
 
 const STUDENT_TREND_WEEKS = 8;
 
@@ -200,6 +203,7 @@ export async function getProgress(studentId: string) {
   const classes = await listClasses(studentId);
   const subjectIds = [...new Set(classes.map((c) => c.subjectId).filter((id): id is string => Boolean(id)))];
   const outlines = await Promise.all(subjectIds.map((id) => loadOutline(id)));
+  const outlineBySubject = new Map(subjectIds.map((id, i) => [id, outlines[i]]));
   const items = outlines.flatMap((o) => outlineItems(o));
   const progress = (await loadProgress([studentId], items.map((i) => i.id))).get(studentId)!;
   const overall = summarize(items, progress);
@@ -244,8 +248,48 @@ export async function getProgress(studentId: string) {
     .sort((a, b) => b.at.getTime() - a.at.getTime())
     .slice(0, 10);
 
+  // Predictive: each active class's outlook to the end of term. Prescriptive: what to do next, most urgent first.
+  const forecasts = await Promise.all(
+    classes
+      .filter((c) => !c.isArchived && c.subjectId)
+      .map(async (c) => {
+        const outline = outlineBySubject.get(c.subjectId as string)!;
+        const classItems = outlineItems(outline);
+        const own = (await loadAssessmentStats(c.id, [{ studentId, createdAt: c.enrolledAt }])).perStudent.get(studentId);
+        const dates = classItems
+          .map((i) => (i.type === 'LESSON' ? progress.lessonsDone.get(i.id) : progress.quizzes.get(i.id)?.lastAt))
+          .filter((d): d is Date => Boolean(d));
+        const latest = [...dates, ...(own?.lastSubmission ? [own.lastSubmission] : [])].sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+        const end = termEnd(c.term, c.schoolYear);
+        const { prediction, context } = forecastStudent({ outline, items: classItems, progress, own, enrolledAt: c.enrolledAt, lastActivity: latest, termEnd: end });
+        return { cls: c, prediction, context, termEnd: end };
+      }),
+  );
+  const outlook = forecasts.map(({ cls, prediction, termEnd: end }) => ({
+    classId: cls.id,
+    subjectCode: cls.subjectCode,
+    subjectName: cls.subjectName,
+    termEnd: end,
+    status: prediction.predictedRisk === 'HIGH' ? 'AT_RISK' : prediction.predictedRisk === 'MODERATE' ? 'NEEDS_ATTENTION' : 'ON_TRACK',
+    predictedScore: prediction.predictedScore,
+    scoreLow: prediction.scoreLow,
+    scoreHigh: prediction.scoreHigh,
+    projectedCompletion: prediction.projectedCompletion,
+    projectedFinish: prediction.projectedFinish,
+    onTrack: prediction.onTrack,
+    pacePerWeek: prediction.pacePerWeek,
+    confidence: prediction.confidence,
+    factors: prediction.factors,
+  }));
+  const recommendations = forecasts
+    .flatMap(({ cls, context }) => studentRecommendations(context).map((r) => ({ ...r, classId: cls.id, subjectCode: cls.subjectCode })))
+    .sort((a, b) => a.priority - b.priority)
+    .slice(0, 5);
+
   return {
     ...overall,
+    outlook,
+    recommendations,
     lessonsDone: progress.lessonsDone.size,
     lastActivity: progress.lastActivity,
     classes: classes.map((c) => ({ id: c.id, subjectCode: c.subjectCode, subjectName: c.subjectName, section: c.section, completion: c.completion })),

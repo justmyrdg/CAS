@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { fullName } from '../utils/fullName';
 import { SCORE_BANDS, bandCounts, trendStart, weeklyTrend } from '../utils/activityTrend';
-import { getAnalytics } from './classAnalytics.service';
+import { getAnalytics, topRecommendations } from './classAnalytics.service';
 
 // Institution-wide views for admins/deans: dashboard counts, every class,
 // every quiz, and the reports page.
@@ -264,8 +264,26 @@ export async function getReports() {
         students: analytics.studentCount,
         completion: analytics.completionRate,
         averageScore: analytics.averageScore,
+        predictedAverage: analytics.forecast.predictedAverage,
+        projectedCompletion: analytics.forecast.projectedCompletion,
+        predictedToFail: analytics.forecast.riskCounts.HIGH,
       }))
       .sort((a, b) => a.label.localeCompare(b.label)),
+    // Predictive: where every active class is heading by the end of term.
+    forecast: {
+      predictedAverage: avg(allStudents.map((s) => s.prediction.predictedScore).filter((v): v is number => v !== null)),
+      projectedCompletion: avg(allStudents.map((s) => s.prediction.projectedCompletion)),
+      riskCounts: {
+        HIGH: allStudents.filter((s) => s.prediction.predictedRisk === 'HIGH').length,
+        MODERATE: allStudents.filter((s) => s.prediction.predictedRisk === 'MODERATE').length,
+        LOW: allStudents.filter((s) => s.prediction.predictedRisk === 'LOW').length,
+      },
+    },
+    // Prescriptive: the most urgent actions across all classes.
+    recommendations: topRecommendations(
+      perClass.map(({ cls, analytics }) => ({ id: cls.id, label: `${cls.subjectCode} · Section ${cls.section}`, recommendations: analytics.recommendations })),
+      8,
+    ),
     stats: {
       activeClasses: activeClasses.length,
       enrolledStudents: distinct.size,

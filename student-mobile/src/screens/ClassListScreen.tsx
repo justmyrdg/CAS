@@ -9,6 +9,7 @@ import { colors, fonts } from '../theme/colors';
 import { termLabel, useStudentData } from '../lib/studentApi';
 import type { ClassSummary, Progress } from '../lib/studentApi';
 import { AppHeader, ErrorView, HeaderButton, Loading, PrimaryButton, ProgressBar, StatTile, Tabs, Tag } from '../components/ui';
+import { RecommendationsCard } from '../components/Insights';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'ClassList'>,
@@ -62,6 +63,14 @@ export default function ClassListScreen({ navigation }: Props) {
                   <StatTile label="Items completed" value={`${progress.itemsDone}/${progress.itemsTotal}`} />
                   <StatTile label="Quiz average" value={progress.quizAverage === null ? '—' : `${progress.quizAverage}%`} />
                 </View>
+              )}
+
+              {tab === 'active' && progress && progress.recommendations.length > 0 && (
+                <RecommendationsCard
+                  items={progress.recommendations}
+                  limit={2}
+                  onOpen={(classId) => navigation.navigate('ModuleChapter', { classId })}
+                />
               )}
 
               {classes.length === 0 && (

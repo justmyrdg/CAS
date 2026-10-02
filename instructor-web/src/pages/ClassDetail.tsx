@@ -11,6 +11,7 @@ import OverviewTab from './class/OverviewTab';
 import StudentsTab from './class/StudentsTab';
 import PerformanceTab from './class/PerformanceTab';
 import AtRiskTab from './class/AtRiskTab';
+import InsightsTab from './class/InsightsTab';
 import ContentTab from './class/ContentTab';
 import AssessmentsTab from './class/AssessmentsTab';
 
@@ -23,6 +24,7 @@ const TABS = [
   { slug: 'exams', label: 'Exams' },
   { slug: 'performance', label: 'Performance' },
   { slug: 'at-risk', label: 'At-Risk' },
+  { slug: 'insights', label: 'Insights' },
 ] as const;
 
 export default function ClassDetail() {
@@ -151,6 +153,7 @@ export default function ClassDetail() {
           {tab === 'exams' && <AssessmentsTab key="exams" classId={cls.id} kind="EXAM" />}
           {tab === 'performance' && <PerformanceTab classId={cls.id} />}
           {tab === 'at-risk' && <AtRiskTab classId={cls.id} />}
+          {tab === 'insights' && <InsightsTab classId={cls.id} />}
         </>
       )}
       {cls && confirm && (

@@ -4,6 +4,8 @@ import Layout from '../components/Layout';
 import { PrimaryButton, SecondaryButton, Table, TableRow } from '../components/ui';
 import { CHART_COLORS, ChartCard, ChartGrid, ColumnChart, Donut, KpiCard, KpiGrid, KpiIcons, RISK_COLORS, TrendChart } from '../components/charts';
 import type { TrendWeek } from '../components/charts';
+import { RecommendationList } from '../components/Recommendations';
+import type { RecommendationItem } from '../components/Recommendations';
 import { ApiError, apiRequest } from '../lib/apiClient';
 import { useAuth } from '../state/AuthContext';
 import { schoolYearLabel, termLabel } from '../data/classOptions';
@@ -19,6 +21,8 @@ interface Summary {
   trend: TrendWeek[];
   riskCounts: { HIGH: number; MODERATE: number; LOW: number };
   classes: { id: string; label: string; students: number; completion: number | null; averageScore: number | null; assessmentAverage: number | null }[];
+  predictedToFail: number;
+  recommendations: (RecommendationItem & { classId: string })[];
 }
 const CLASS_COLS = '110px 1.6fr 90px 1.3fr 90px 120px';
 
@@ -67,7 +71,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <KpiGrid>
+      <KpiGrid columns={5}>
         <KpiCard icon={KpiIcons.classes} label="Active classes" value={summary ? String(summary.activeClasses) : '—'} />
         <KpiCard icon={KpiIcons.students} label="Total students" value={summary ? String(summary.totalStudents) : '—'} />
         <KpiCard icon={KpiIcons.score} label="Avg. module quiz score" value={pct(summary?.averageScore)} />
@@ -77,6 +81,13 @@ export default function Dashboard() {
           value={summary ? String(summary.atRiskStudents) : '—'}
           hint="High or moderate risk"
           tone={summary?.atRiskStudents ? 'danger' : 'default'}
+        />
+        <KpiCard
+          icon={KpiIcons.progress}
+          label="Predicted to fail"
+          value={summary ? String(summary.predictedToFail) : '—'}
+          hint="Forecast to end of term"
+          tone={summary?.predictedToFail ? 'danger' : 'default'}
         />
       </KpiGrid>
 
@@ -107,7 +118,21 @@ export default function Dashboard() {
               />
             </ChartCard>
           </ChartGrid>
-          <ChartGrid columns="minmax(0, 1fr)" style={{ marginBottom: 28 }}>
+          <ChartGrid columns="minmax(0, 1fr) minmax(0, 1fr)" style={{ marginBottom: 28 }}>
+            <ChartCard title="Recommended actions" subtitle="The most urgent across your classes — open a class's Insights tab for more">
+              <RecommendationList
+                items={summary.recommendations}
+                empty="No actions needed right now."
+                action={(r) => (
+                  <SecondaryButton
+                    onClick={() => navigate(`/classes/${(r as RecommendationItem & { classId: string }).classId}/insights`)}
+                    style={{ padding: '5px 10px', fontSize: 12 }}
+                  >
+                    Open
+                  </SecondaryButton>
+                )}
+              />
+            </ChartCard>
             <ChartCard title="Your classes compared" subtitle="Average completion, module-quiz score and score on your own quizzes & exams">
               <ColumnChart
                 groups={summary.classes.map((c) => ({

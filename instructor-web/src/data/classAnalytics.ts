@@ -6,6 +6,29 @@ import type { TrendWeek } from '../components/charts';
 
 export type RiskLevel = 'HIGH' | 'MODERATE' | 'LOW';
 
+// Predictive: a student's forecast to the end of term (backend utils/predictive.ts).
+export interface Prediction {
+  pacePerWeek: number;
+  projectedCompletion: number;
+  projectedFinish: string | null;
+  onTrack: boolean;
+  predictedScore: number | null;
+  scoreLow: number | null;
+  scoreHigh: number | null;
+  failProbability: number;
+  predictedRisk: RiskLevel;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  factors: string[];
+}
+
+// Prescriptive: a recommended action (backend utils/prescriptive.ts); priority 1 = do first.
+export interface Recommendation {
+  priority: 1 | 2 | 3;
+  kind: string;
+  title: string;
+  detail: string;
+}
+
 export interface StudentAnalytics {
   studentId: string;
   name: string;
@@ -20,6 +43,9 @@ export interface StudentAnalytics {
   lastActivity: string | null;
   risk: RiskLevel;
   reasons: string[];
+  prediction: Prediction;
+  // What the instructor could do for this student, most important first.
+  actions: string[];
 }
 
 export interface ClassAnalytics {
@@ -40,6 +66,16 @@ export interface ClassAnalytics {
   modules: { id: string; title: string; itemsTotal: number; completion: number }[];
   // Weekly activity on this class's content, last 12 weeks.
   trend: TrendWeek[];
+  forecast: {
+    termEnd: string;
+    predictedAverage: number | null;
+    projectedCompletion: number | null;
+    onTrack: number;
+    riskCounts: Record<RiskLevel, number>;
+    scoreBands: number[];
+    completion: { weekStart: string; actual: number | null; projected: number | null }[];
+  };
+  recommendations: Recommendation[];
   lowestTopic: { moduleTitle: string; chapterTitle: string; average: number } | null;
   riskCounts: Record<RiskLevel, number>;
   students: StudentAnalytics[];

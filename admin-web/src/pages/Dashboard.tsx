@@ -18,6 +18,8 @@ import {
   TrendChart,
 } from '../components/charts';
 import type { TrendWeek } from '../components/charts';
+import { RecommendationList } from '../components/Recommendations';
+import type { RecommendationItem } from '../components/Recommendations';
 import { ApiError, apiRequest } from '../lib/apiClient';
 import { useAuth } from '../state/AuthContext';
 
@@ -49,7 +51,20 @@ interface ReportsData {
   };
   riskCounts: { HIGH: number; MODERATE: number; LOW: number };
   completionBands: number[];
-  classes: { id: string; label: string; instructorName: string; students: number; completion: number | null; averageScore: number | null }[];
+  classes: {
+    id: string;
+    label: string;
+    instructorName: string;
+    students: number;
+    completion: number | null;
+    averageScore: number | null;
+    predictedAverage: number | null;
+    projectedCompletion: number | null;
+    predictedToFail: number;
+  }[];
+  // Predictive: where the active classes are heading by the end of term. Prescriptive: what to do about it.
+  forecast: { predictedAverage: number | null; projectedCompletion: number | null; riskCounts: { HIGH: number; MODERATE: number; LOW: number } };
+  recommendations: (RecommendationItem & { classId: string })[];
   subjects: { code: string; name: string; classes: number; students: number; averageCompletion: number | null; averageScore: number | null }[];
   flagged: { kind: 'STUDENT' | 'QUIZ'; title: string; detail: string; tag: string }[];
 }
@@ -124,7 +139,13 @@ export default function Dashboard() {
         <KpiCard icon={KpiIcons.students} value={value(c?.students)} label="Students" hint={report ? `${report.stats.enrolledStudents} enrolled in active classes` : undefined} />
         <KpiCard icon={KpiIcons.progress} value={report ? pct(report.stats.averageCompletion) : '—'} label="Avg. completion" />
         <KpiCard icon={KpiIcons.score} value={report ? pct(report.stats.averageScore) : '—'} label="Avg. module quiz score" />
-        <KpiCard icon={KpiIcons.check} value={String(attempts)} label="Module quiz attempts" />
+        <KpiCard
+          icon={KpiIcons.check}
+          value={report ? String(report.forecast.riskCounts.HIGH) : '—'}
+          label="Predicted to fail"
+          hint={report ? `Forecast final avg. ${pct(report.forecast.predictedAverage)}` : undefined}
+          tone={report && report.forecast.riskCounts.HIGH > 0 ? 'danger' : 'default'}
+        />
         <KpiCard
           icon={KpiIcons.alert}
           value={report ? String(report.stats.atRiskStudents) : '—'}
@@ -161,6 +182,53 @@ export default function Dashboard() {
             )}
           </ChartCard>
         </ChartGrid>
+      )}
+
+      {report && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '6px 0 12px' }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)' }}>Forecast &amp; recommended actions</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Predicted from each student's pace, scores, score trend and missed work, to the end of term
+            </div>
+          </div>
+          <ChartGrid columns="minmax(0, 2fr) minmax(0, 1fr)">
+            <ChartCard title="Classes: now vs. end of term" subtitle="Current completion, projected completion and predicted final score">
+              <ColumnChart
+                groups={report.classes.map((cl) => ({
+                  label: cl.label,
+                  hint: `${cl.instructorName} · ${cl.predictedToFail} predicted to fail`,
+                  values: [cl.completion, cl.projectedCompletion, cl.predictedAverage],
+                }))}
+                series={[
+                  { label: 'Completion now', color: CHART_COLORS.mint },
+                  { label: 'Projected completion', color: CHART_COLORS.green },
+                  { label: 'Predicted final score', color: CHART_COLORS.blue },
+                ]}
+                max={100}
+                unit="%"
+                emptyText="No active classes yet"
+              />
+            </ChartCard>
+            <ChartCard title="Predicted outcome" subtitle="Chance of scoring under 60% on the final">
+              <Donut
+                segments={[
+                  { label: 'Likely to fail (50%+)', value: report.forecast.riskCounts.HIGH, color: RISK_COLORS.HIGH },
+                  { label: 'Borderline (25–49%)', value: report.forecast.riskCounts.MODERATE, color: RISK_COLORS.MODERATE },
+                  { label: 'Likely to pass', value: report.forecast.riskCounts.LOW, color: RISK_COLORS.LOW },
+                ]}
+                centerValue={pct(report.forecast.projectedCompletion)}
+                centerLabel="projected done"
+                emptyText="No students yet"
+              />
+            </ChartCard>
+          </ChartGrid>
+          <ChartGrid columns="minmax(0, 1fr)">
+            <ChartCard title="Recommended actions" subtitle="The most urgent across all classes">
+              <RecommendationList items={report.recommendations} empty="No actions needed right now." />
+            </ChartCard>
+          </ChartGrid>
+        </>
       )}
 
       {report && data && (

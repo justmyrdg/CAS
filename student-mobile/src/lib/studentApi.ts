@@ -112,6 +112,36 @@ export interface Progress {
   trend: { weekStart: string; lessons: number; quizzes: number; assessments: number }[];
   // The last 8 module-quiz attempts, oldest first.
   quizScores: { title: string; at: string; pct: number }[];
+  // Predictive: each active class's forecast to the end of term.
+  outlook: ClassOutlook[];
+  // Prescriptive: what to do next, most urgent first (priority 1 = do now).
+  recommendations: StudentRecommendation[];
+}
+
+export interface ClassOutlook {
+  classId: string;
+  subjectCode: string;
+  subjectName: string;
+  termEnd: string;
+  status: 'ON_TRACK' | 'NEEDS_ATTENTION' | 'AT_RISK';
+  predictedScore: number | null;
+  scoreLow: number | null;
+  scoreHigh: number | null;
+  projectedCompletion: number;
+  projectedFinish: string | null;
+  onTrack: boolean;
+  pacePerWeek: number;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  factors: string[];
+}
+
+export interface StudentRecommendation {
+  priority: 1 | 2 | 3;
+  kind: string;
+  title: string;
+  detail: string;
+  classId: string;
+  subjectCode: string;
 }
 
 const TERM_LABELS: Record<Term, string> = { FIRST_SEM: '1st Sem', SECOND_SEM: '2nd Sem', SUMMER: 'Summer' };

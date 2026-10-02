@@ -347,6 +347,105 @@ export function TrendChart({
   );
 }
 
+// ---------- forecast (actual line, then a dashed projection) ----------
+
+export interface ForecastWeek {
+  weekStart: string;
+  actual: number | null;
+  projected: number | null;
+}
+
+// A percentage over time: the solid line is what happened, the dashed line is where it is heading.
+export function ForecastChart({ weeks, height = 230, targetLabel }: { weeks: ForecastWeek[]; height?: number; targetLabel?: string }) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const [hover, setHover] = useState<number | null>(null);
+  const pad = { top: 14, right: 16, bottom: 26, left: 40 };
+  const innerW = Math.max(width - pad.left - pad.right, 10);
+  const innerH = height - pad.top - pad.bottom;
+  const x = (i: number) => pad.left + (weeks.length <= 1 ? innerW / 2 : (i / (weeks.length - 1)) * innerW);
+  const y = (v: number) => pad.top + innerH - (v / 100) * innerH;
+  const actual = weeks.map((w, i) => [i, w.actual] as const).filter((p): p is readonly [number, number] => p[1] !== null);
+  const projected = weeks.map((w, i) => [i, w.projected] as const).filter((p): p is readonly [number, number] => p[1] !== null);
+  const path = (pts: readonly (readonly [number, number])[]) => pts.map(([i, v], k) => `${k ? 'L' : 'M'}${x(i)},${y(v)}`).join(' ');
+  const nowIndex = actual.length ? actual[actual.length - 1][0] : 0;
+  const labelEvery = Math.max(1, Math.ceil(weeks.length / Math.max(1, Math.floor(innerW / 64))));
+
+  function onMove(e: MouseEvent<SVGSVGElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const i = Math.round(((e.clientX - rect.left - pad.left) / innerW) * (weeks.length - 1));
+    setHover(i >= 0 && i < weeks.length ? i : null);
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', fontSize: 12, color: 'var(--text-muted)' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 16, height: 0, borderTop: `2.5px solid ${CHART_COLORS.green}` }} />
+          Actual
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 16, height: 0, borderTop: `2.5px dashed ${CHART_COLORS.amber}` }} />
+          Forecast at the current pace
+        </span>
+      </div>
+      <div ref={ref} style={{ position: 'relative', height }}>
+        {width > 0 && weeks.length > 0 && (
+          <svg width={width} height={height} onMouseMove={onMove} onMouseLeave={() => setHover(null)} style={{ display: 'block' }}>
+            {[0, 25, 50, 75, 100].map((v) => (
+              <g key={v}>
+                <line x1={pad.left} x2={width - pad.right} y1={y(v)} y2={y(v)} stroke={CHART_COLORS.grid} strokeDasharray={v === 0 ? undefined : '3 4'} />
+                <text x={pad.left - 8} y={y(v) + 4} textAnchor="end" fontSize={11} fill={CHART_COLORS.axis}>
+                  {v}%
+                </text>
+              </g>
+            ))}
+            {/* "Today" divider between history and forecast */}
+            <line x1={x(nowIndex)} x2={x(nowIndex)} y1={pad.top} y2={pad.top + innerH} stroke={CHART_COLORS.axis} strokeDasharray="2 3" />
+            <text x={x(nowIndex) + 4} y={pad.top + 10} fontSize={10} fill={CHART_COLORS.axis}>
+              Today
+            </text>
+            {targetLabel && (
+              <text x={x(weeks.length - 1)} y={pad.top + 10} textAnchor="end" fontSize={10} fill={CHART_COLORS.axis}>
+                {targetLabel}
+              </text>
+            )}
+            {weeks.map((w, i) =>
+              (i % labelEvery === 0 && weeks.length - 1 - i >= labelEvery) || i === weeks.length - 1 ? (
+                <text
+                  key={w.weekStart}
+                  x={x(i)}
+                  y={height - 6}
+                  textAnchor={i === 0 ? 'start' : i === weeks.length - 1 ? 'end' : 'middle'}
+                  fontSize={11}
+                  fill={CHART_COLORS.axis}
+                >
+                  {weekLabel(w.weekStart)}
+                </text>
+              ) : null,
+            )}
+            {actual.length > 1 && (
+              <path d={`${path(actual)} L${x(nowIndex)},${y(0)} L${x(actual[0][0])},${y(0)} Z`} fill={CHART_COLORS.green} opacity={0.08} />
+            )}
+            <path d={path(actual)} fill="none" stroke={CHART_COLORS.green} strokeWidth={2.5} strokeLinejoin="round" />
+            <path d={path(projected)} fill="none" stroke={CHART_COLORS.amber} strokeWidth={2.5} strokeDasharray="6 5" strokeLinejoin="round" />
+            {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={pad.top} y2={pad.top + innerH} stroke={CHART_COLORS.axis} strokeDasharray="3 3" />}
+            {projected.length > 0 && (
+              <circle cx={x(projected[projected.length - 1][0])} cy={y(projected[projected.length - 1][1])} r={4.5} fill="#fff" stroke={CHART_COLORS.amber} strokeWidth={2.5} />
+            )}
+          </svg>
+        )}
+        {hover !== null && weeks[hover] && (
+          <Tooltip x={x(hover)} y={pad.top + 4} width={width}>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>Week of {weekLabel(weeks[hover].weekStart)}</div>
+            {weeks[hover].actual !== null && <div>Actual: {weeks[hover].actual}%</div>}
+            {weeks[hover].projected !== null && <div>Forecast: {weeks[hover].projected}%</div>}
+          </Tooltip>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---------- vertical (grouped) columns ----------
 
 export function ColumnChart({

@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
+import { OutlookCard, RecommendationsCard } from '../components/Insights';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { colors, fonts } from '../theme/colors';
 import { useStudentData } from '../lib/studentApi';
@@ -31,6 +35,7 @@ function useWidth() {
 
 export default function ProgressScreen() {
   const { data, error, loading, reload } = useStudentData<Progress>('/api/student/progress');
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -54,6 +59,9 @@ export default function ProgressScreen() {
                   <StatTile label="Quiz average" value={data.quizAverage === null ? '—' : `${data.quizAverage}%`} />
                 </View>
               </View>
+
+              <RecommendationsCard items={data.recommendations} onOpen={(classId) => navigation.navigate('ModuleChapter', { classId })} />
+              <OutlookCard items={data.outlook} />
 
               <Card>
                 <SectionTitle title="Weekly activity" right={<Text style={styles.muted}>Last 8 weeks</Text>} />

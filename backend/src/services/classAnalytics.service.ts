@@ -2,11 +2,17 @@ import { prisma } from '../config/prisma';
 import { fullName } from '../utils/fullName';
 import { presentBlocks } from '../utils/lessonBlocks';
 import { ApiError } from '../utils/ApiError';
-import { trendStart, weeklyTrend } from '../utils/activityTrend';
+import { SCORE_BANDS, bandCounts, trendStart, weeklyTrend } from '../utils/activityTrend';
 import type { TrendWeek } from '../utils/activityTrend';
+import { presentQuestions } from '../utils/assessmentQuestions';
+import type { QuestionResult } from '../utils/assessmentQuestions';
+import { predictStudent, termEnd as termEndOf } from '../utils/predictive';
+import type { Prediction } from '../utils/predictive';
+import { classRecommendations, studentActions } from '../utils/prescriptive';
+import type { Recommendation, StudentContext } from '../utils/prescriptive';
 import { getClass } from './classes.service';
-import { assessRisk, loadOutline, loadProgress, outlineItems, summarize } from './progress.service';
-import type { OutlineModule, StudentProgress } from './progress.service';
+import { assessRisk, isItemDone, loadOutline, loadProgress, outlineItems, summarize } from './progress.service';
+import type { OutlineItem, OutlineModule, StudentProgress } from './progress.service';
 
 // Instructor-facing numbers for one class, computed from its enrolled
 // students' lesson completions and quiz attempts (see progress.service for the rules).
@@ -35,24 +41,28 @@ async function loadClassData(classId: string, instructorId: string | null) {
 }
 
 // The instructor's own quizzes & exams for the class: per student, their best fully-graded score on each (a
-// submission with essays still to grade doesn't count yet) and which closed ones they missed; per assessment, how
-// the class did. Students who joined after one closed aren't counted as missing it.
-async function loadAssessmentStats(classId: string, enrollments: { studentId: string; createdAt: Date }[]) {
+// submission with essays still to grade doesn't count yet), which closed ones they missed and which open ones they
+// haven't taken; per assessment, how the class did and how often each question was answered correctly. Students who
+// joined after one closed aren't counted as missing it.
+export async function loadAssessmentStats(classId: string, enrollments: { studentId: string; createdAt: Date }[]) {
   const assessments = await prisma.assessment.findMany({
     where: { classId, published: true },
     select: {
       id: true,
       title: true,
       kind: true,
+      opensAt: true,
       closesAt: true,
+      questions: true,
       attempts: {
         where: { submittedAt: { not: null }, studentId: { in: enrollments.map((e) => e.studentId) } },
-        select: { studentId: true, score: true, maxScore: true, needsGrading: true, submittedAt: true },
+        select: { studentId: true, score: true, maxScore: true, needsGrading: true, submittedAt: true, results: true },
       },
     },
     orderBy: { createdAt: 'asc' },
   });
   const now = Date.now();
+  const isOpen = (a: { opensAt: Date | null; closesAt: Date | null }) => (!a.opensAt || a.opensAt.getTime() <= now) && (!a.closesAt || a.closesAt.getTime() > now);
   const bestPct = (attempts: { score: number | null; maxScore: number; needsGrading: boolean }[]) => {
     const graded = attempts.filter((t) => !t.needsGrading && t.score !== null).map((t) => Math.round(((t.score as number) / Math.max(t.maxScore, 1)) * 100));
     return graded.length ? Math.max(...graded) : null;
@@ -60,7 +70,8 @@ async function loadAssessmentStats(classId: string, enrollments: { studentId: st
 
   const perStudent = new Map(
     enrollments.map((e) => {
-      const scores: number[] = [];
+      const scores: { pct: number; at: Date }[] = [];
+      const openNotTaken: { title: string; kind: 'QUIZ' | 'EXAM'; closesAt: Date | null }[] = [];
       let taken = 0;
       let missedExams = 0;
       let missedQuizzes = 0;
@@ -70,14 +81,18 @@ async function loadAssessmentStats(classId: string, enrollments: { studentId: st
         if (mine.length) {
           taken += 1;
           const best = bestPct(mine);
-          if (best !== null) scores.push(best);
+          const first = mine.reduce((d, t) => (t.submittedAt && t.submittedAt < d ? t.submittedAt : d), mine[0].submittedAt as Date);
+          if (best !== null) scores.push({ pct: best, at: first });
           for (const t of mine) if (t.submittedAt && (!lastSubmission || t.submittedAt > lastSubmission)) lastSubmission = t.submittedAt;
         } else if (a.closesAt && a.closesAt.getTime() < now && e.createdAt < a.closesAt) {
           if (a.kind === 'EXAM') missedExams += 1;
           else missedQuizzes += 1;
+        } else if (isOpen(a)) {
+          openNotTaken.push({ title: a.title, kind: a.kind, closesAt: a.closesAt });
         }
       }
-      return [e.studentId, { average: avg(scores), taken, missedExams, missedQuizzes, lastSubmission }] as const;
+      const average = scores.length ? Math.round(scores.reduce((sum, x) => sum + x.pct, 0) / scores.length) : null;
+      return [e.studentId, { average, scores, taken, missedExams, missedQuizzes, openNotTaken, lastSubmission }] as const;
     }),
   );
 
@@ -94,16 +109,104 @@ async function loadAssessmentStats(classId: string, enrollments: { studentId: st
       toGrade: a.attempts.filter((t) => t.needsGrading).length,
     };
   });
+
+  // Item analysis: the share of the points students earned on each graded question.
+  const hardQuestions = assessments.flatMap((a) =>
+    presentQuestions(a.questions).map((q) => {
+      const rates = a.attempts
+        .map((t) => (t.results as Record<string, QuestionResult> | null)?.[q.id])
+        .filter((r): r is QuestionResult => Boolean(r?.graded))
+        .map((r) => r.points / Math.max(q.points, 1));
+      return { assessmentTitle: a.title, prompt: q.prompt, responses: rates.length, correctRate: rates.length ? Math.round((rates.reduce((x, y) => x + y, 0) / rates.length) * 100) : 100 };
+    }),
+  );
+  const open = assessments.filter(isOpen).map((a) => ({ title: a.title, closesAt: a.closesAt, notTaken: enrollments.length - new Set(a.attempts.map((t) => t.studentId)).size }));
   const submissions = assessments.flatMap((a) => a.attempts.map((t) => t.submittedAt as Date));
-  return { perStudent, summary, submissions };
+  return { perStudent, summary, submissions, hardQuestions, open, essaysToGrade: summary.reduce((n, a) => n + a.toGrade, 0) };
+}
+
+export type AssessmentStats = Awaited<ReturnType<typeof loadAssessmentStats>>;
+
+// The forecast for one student in one class (utils/predictive.ts) and the facts the recommendations need
+// (utils/prescriptive.ts). Shared by the instructor analytics and the student app.
+export function forecastStudent(input: {
+  outline: OutlineModule[];
+  items: OutlineItem[];
+  progress: StudentProgress;
+  own: AssessmentStats['perStudent'] extends Map<string, infer V> ? V | undefined : never;
+  enrolledAt: Date;
+  lastActivity: Date | null;
+  termEnd: Date;
+}): { prediction: Prediction; context: StudentContext } {
+  const { outline, items, progress: p, own } = input;
+  const stats = summarize(items, p);
+  const quizChapter = new Map(outline.flatMap((m) => m.chapters.flatMap((c) => c.items.filter((i) => i.type === 'QUIZ').map((i) => [i.id, c.title] as const))));
+  const quizBests = items
+    .filter((i) => i.type === 'QUIZ')
+    .map((i) => ({ item: i, best: p.quizzes.get(i.id) }))
+    .filter((x): x is { item: OutlineItem; best: NonNullable<typeof x.best> } => Boolean(x.best));
+  const pctOf = (b: { score: number; total: number }) => Math.round((b.score / Math.max(b.total, 1)) * 100);
+  const prediction = predictStudent({
+    itemsDone: stats.itemsDone,
+    itemsTotal: stats.itemsTotal,
+    doneDates: [...items.filter((i) => i.type === 'LESSON').map((i) => p.lessonsDone.get(i.id)), ...quizBests.map((q) => q.best.firstAt)].filter((d): d is Date => Boolean(d)),
+    quizScores: quizBests.map((q) => ({ pct: pctOf(q.best), at: q.best.firstAt })),
+    assessmentScores: own?.scores ?? [],
+    missedExams: own?.missedExams ?? 0,
+    missedQuizzes: own?.missedQuizzes ?? 0,
+    enrolledAt: input.enrolledAt,
+    termEnd: input.termEnd,
+  });
+  const next = items.find((i) => !isItemDone(i, p));
+  return {
+    prediction,
+    context: {
+      prediction,
+      itemsDone: stats.itemsDone,
+      itemsTotal: stats.itemsTotal,
+      termEnd: input.termEnd,
+      lastActivity: input.lastActivity,
+      nextItem: next ? { title: next.title, type: next.type } : null,
+      weakQuizzes: quizBests.map((q) => ({ chapterTitle: quizChapter.get(q.item.id) ?? q.item.title, pct: pctOf(q.best) })).filter((q) => q.pct < 75),
+      openAssessments: own?.openNotTaken ?? [],
+      missedExams: own?.missedExams ?? 0,
+    },
+  };
+}
+
+// Class completion week by week: what actually happened up to now, then the projection to the end of term if every
+// student keeps their current pace.
+function completionSeries(students: { doneDates: Date[]; itemsDone: number; pace: number }[], itemsTotal: number, termEnd: Date) {
+  const WEEK = 7 * 86_400_000;
+  const now = Date.now();
+  const firstWeek = trendStart().getTime();
+  const out: { weekStart: string; actual: number | null; projected: number | null }[] = [];
+  if (!students.length || !itemsTotal) return out;
+  const pct = (v: number) => Math.round(v);
+  for (let t = firstWeek; t <= Math.max(termEnd.getTime(), now); t += WEEK) {
+    const weekEnd = Math.min(t + WEEK, now);
+    const isPast = t <= now;
+    const current = isPast && t + WEEK > now;
+    const actual = isPast
+      ? pct((students.reduce((sum, s) => sum + s.doneDates.filter((d) => d.getTime() <= weekEnd).length, 0) / (students.length * itemsTotal)) * 100)
+      : null;
+    const weeksAhead = (t + WEEK - now) / WEEK;
+    const projected =
+      !isPast || current
+        ? pct((students.reduce((sum, s) => sum + Math.min(itemsTotal, s.itemsDone + s.pace * Math.max(weeksAhead, 0)), 0) / (students.length * itemsTotal)) * 100)
+        : null;
+    out.push({ weekStart: new Date(t).toISOString().slice(0, 10), actual, projected });
+  }
+  return out;
 }
 
 const later = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : (a ?? b));
 
 // Per-student stats plus at-risk assessment, and class-wide performance.
 export async function getAnalytics(classId: string, instructorId: string | null) {
-  const { enrollments, outline, items, progress } = await loadClassData(classId, instructorId);
+  const { cls, enrollments, outline, items, progress } = await loadClassData(classId, instructorId);
   const assessments = await loadAssessmentStats(classId, enrollments);
+  const termEnd = termEndOf(cls.term, cls.schoolYear);
   const quizIds = items.filter((i) => i.type === 'QUIZ').map((i) => i.id);
   const quizTimes =
     quizIds.length && enrollments.length
@@ -130,6 +233,15 @@ export async function getAnalytics(classId: string, instructorId: string | null)
       const own = assessments.perStudent.get(enrollment.studentId);
       // Submitting a quiz or exam counts as activity too.
       const lastActivity = later(p.lastActivity, own?.lastSubmission ?? null);
+      const { prediction, context } = forecastStudent({
+        outline,
+        items,
+        progress: p,
+        own,
+        enrolledAt: enrollment.createdAt,
+        lastActivity,
+        termEnd,
+      });
       const risk = assessRisk({
         quizAverage: stats.quizAverage,
         assessmentAverage: own?.average ?? null,
@@ -153,6 +265,11 @@ export async function getAnalytics(classId: string, instructorId: string | null)
         lastActivity,
         risk: risk.level,
         reasons: risk.reasons,
+        // Predictive: the forecast to the end of term. Prescriptive: what the instructor could do.
+        prediction,
+        actions: studentActions(context),
+        // When each item was finished (progress is loaded for this class's items only) — for the completion chart.
+        doneDates: [...p.lessonsDone.values(), ...[...p.quizzes.values()].map((q) => q.firstAt)],
       };
     })
     .sort((a, b) => ['HIGH', 'MODERATE', 'LOW'].indexOf(a.risk) - ['HIGH', 'MODERATE', 'LOW'].indexOf(b.risk) || a.name.localeCompare(b.name));
@@ -170,6 +287,7 @@ export async function getAnalytics(classId: string, instructorId: string | null)
 
   // Weakest chapter = lowest average best-score across its quizzes, among chapters students have attempted.
   let lowestTopic: { moduleTitle: string; chapterTitle: string; average: number } | null = null;
+  const chapterAverages: { title: string; average: number; students: number }[] = [];
   for (const m of outline) {
     for (const c of m.chapters) {
       const scores = c.items
@@ -181,11 +299,44 @@ export async function getAnalytics(classId: string, instructorId: string | null)
             .map((best) => Math.round((best.score / Math.max(best.total, 1)) * 100)),
         );
       const average = avg(scores);
+      if (average !== null) chapterAverages.push({ title: c.title, average, students: scores.length });
       if (average !== null && (!lowestTopic || average < lowestTopic.average)) {
         lowestTopic = { moduleTitle: m.title, chapterTitle: c.title, average };
       }
     }
   }
+
+  const predictions = students.map((s) => s.prediction);
+  const forecast = {
+    termEnd,
+    predictedAverage: avg(predictions.map((p) => p.predictedScore).filter((v): v is number => v !== null)),
+    projectedCompletion: avg(predictions.map((p) => p.projectedCompletion)),
+    onTrack: predictions.filter((p) => p.onTrack).length,
+    riskCounts: {
+      HIGH: predictions.filter((p) => p.predictedRisk === 'HIGH').length,
+      MODERATE: predictions.filter((p) => p.predictedRisk === 'MODERATE').length,
+      LOW: predictions.filter((p) => p.predictedRisk === 'LOW').length,
+    },
+    scoreBands: bandCounts(
+      predictions.map((p) => p.predictedScore).filter((v): v is number => v !== null),
+      SCORE_BANDS,
+    ),
+    completion: completionSeries(
+      students.map((s) => ({ doneDates: s.doneDates, itemsDone: s.itemsDone, pace: s.prediction.pacePerWeek })),
+      items.length,
+      termEnd,
+    ),
+  };
+  const recommendations = classRecommendations({
+    studentCount: enrollments.length,
+    predictedHigh: students.filter((s) => s.prediction.predictedRisk === 'HIGH').map((s) => ({ name: s.name })),
+    notOnTrack: predictions.filter((p) => !p.onTrack).length,
+    weakChapters: chapterAverages,
+    hardQuestions: assessments.hardQuestions,
+    openAssessments: assessments.open,
+    essaysToGrade: assessments.essaysToGrade,
+    termEnd,
+  });
 
   return {
     studentCount: enrollments.length,
@@ -197,14 +348,24 @@ export async function getAnalytics(classId: string, instructorId: string | null)
     assessments: assessments.summary,
     modules,
     trend,
+    forecast,
+    recommendations,
     lowestTopic,
     riskCounts: {
       HIGH: students.filter((s) => s.risk === 'HIGH').length,
       MODERATE: students.filter((s) => s.risk === 'MODERATE').length,
       LOW: students.filter((s) => s.risk === 'LOW').length,
     },
-    students,
+    students: students.map(({ doneDates: _dates, ...s }) => s),
   };
+}
+
+// The most urgent class recommendations across several classes, each tagged with its class.
+export function topRecommendations(classes: { id: string; label: string; recommendations: Recommendation[] }[], limit: number) {
+  return classes
+    .flatMap((c) => c.recommendations.filter((r) => r.kind !== 'ON_TRACK').map((r) => ({ ...r, classId: c.id, classLabel: c.label })))
+    .sort((a, b) => a.priority - b.priority)
+    .slice(0, limit);
 }
 
 // Dashboard numbers across an instructor's active classes: average quiz score over
@@ -240,7 +401,12 @@ export async function getInstructorOverview(instructorId: string) {
       completion: analytics[i].completionRate,
       averageScore: analytics[i].averageScore,
       assessmentAverage: analytics[i].assessmentAverage,
+      predictedAverage: analytics[i].forecast.predictedAverage,
+      projectedCompletion: analytics[i].forecast.projectedCompletion,
     })),
+    // Predictive: distinct students forecast likely to fail. Prescriptive: the most urgent actions across classes.
+    predictedToFail: new Set(students.filter((s) => s.prediction.predictedRisk === 'HIGH').map((s) => s.studentId)).size,
+    recommendations: topRecommendations(classes.map((c, i) => ({ id: c.id, label: `${c.subjectCode} · ${c.section}`, recommendations: analytics[i].recommendations })), 6),
   };
 }
 
