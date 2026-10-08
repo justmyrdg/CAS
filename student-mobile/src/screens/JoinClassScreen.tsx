@@ -5,7 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts } from '../theme/colors';
 import { apiRequest, errorText } from '../lib/api';
-import { BackHeader, PrimaryButton } from '../components/ui';
+import { BackHeader, Column, PrimaryButton } from '../components/ui';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'JoinClass'>;
 
@@ -37,6 +37,7 @@ export default function JoinClassScreen({ navigation }: Props) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.white }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <Column>
         <BackHeader crumb="My Classes" title="Join a class" onBack={() => navigation.goBack()} />
         <View style={styles.body}>
           <Text style={styles.text}>Enter the join code your instructor shared, for example CS101-8XQ2.</Text>
@@ -59,6 +60,7 @@ export default function JoinClassScreen({ navigation }: Props) {
           )}
           <PrimaryButton label={joining ? 'Joining…' : 'Join class'} onPress={() => void join()} disabled={joining} />
         </View>
+        </Column>
       </SafeAreaView>
     </View>
   );

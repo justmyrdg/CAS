@@ -8,6 +8,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { OutlookCard, RecommendationsCard } from '../components/Insights';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { colors, fonts } from '../theme/colors';
+import { widePage } from '../lib/responsive';
 import { useStudentData } from '../lib/studentApi';
 import type { Progress } from '../lib/studentApi';
 import { AppHeader, Card, ErrorView, Loading, ProgressBar, SectionTitle, StatTile, Tag } from '../components/ui';
@@ -47,7 +48,7 @@ export default function ProgressScreen() {
           ) : !data ? (
             <ErrorView message={error ?? 'Unable to load progress'} onRetry={() => void reload()} />
           ) : (
-            <ScrollView contentContainerStyle={styles.body}>
+            <ScrollView contentContainerStyle={[styles.body, widePage]}>
               <View style={{ gap: 8 }}>
                 <View style={styles.statRow}>
                   <StatTile label="Overall completion" value={`${data.completion}%`} />

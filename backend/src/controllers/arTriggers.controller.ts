@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler';
 import * as service from '../services/arTriggers.service';
+import { storage } from '../config/storage';
 
 // Trigger pictures for AR models. Admin routes live under /api/admin/ar-models/:id/triggers; the AR page's combined
 // target file, its model list and the picture thumbnails are public (fetched by the WebView / <img> without a token).
@@ -46,9 +47,7 @@ export const targetsFile = asyncHandler(async (_req: Request, res: Response) => 
 });
 
 export const image = asyncHandler(async (req: Request, res: Response) => {
-  const file = await service.triggerImageFile(p(req, 'id'));
+  const imageName = await service.triggerImageName(p(req, 'id'));
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.sendFile(file, (err) => {
-    if (err && !res.headersSent) res.status(404).json({ error: 'Picture file is missing' });
-  });
+  await storage.send(res, 'ar-triggers', imageName, 'Picture file is missing');
 });

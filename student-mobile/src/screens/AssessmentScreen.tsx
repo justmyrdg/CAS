@@ -9,7 +9,7 @@ import { apiRequest, errorText } from '../lib/api';
 import { useStudentData } from '../lib/studentApi';
 import { fmtDate, fmtScore, kindLabel } from '../lib/assessmentApi';
 import type { AssessmentSummary, AttemptReview, ReviewQuestion, StartedAttempt, StudentQuestion } from '../lib/assessmentApi';
-import { ErrorView, Loading, PrimaryButton, ProgressBar, SecondaryButton } from '../components/ui';
+import { Column, ErrorView, Loading, PrimaryButton, ProgressBar, SecondaryButton } from '../components/ui';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Assessment'>;
 type Answers = Record<string, unknown>;
@@ -472,7 +472,7 @@ function Screen({ children }: { children: ReactNode }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.white }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {children}
+        <Column>{children}</Column>
       </SafeAreaView>
     </View>
   );

@@ -7,7 +7,7 @@ import { colors, fonts } from '../theme/colors';
 import { useAuth } from '../state/AuthContext';
 import { apiRequest, errorText } from '../lib/api';
 import type { StudentUser } from '../lib/api';
-import { BackHeader, PrimaryButton, SecondaryButton } from '../components/ui';
+import { BackHeader, Column, PrimaryButton, SecondaryButton } from '../components/ui';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ChangePassword'>;
 
@@ -47,6 +47,7 @@ export default function ChangePasswordScreen({ navigation }: Props) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.white }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <Column>
         {forced ? (
           <View style={styles.forcedHeader}>
             <Text style={styles.title}>Set a new password</Text>
@@ -77,6 +78,7 @@ export default function ChangePasswordScreen({ navigation }: Props) {
             </>
           )}
         </ScrollView>
+        </Column>
       </SafeAreaView>
     </View>
   );

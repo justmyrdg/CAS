@@ -8,7 +8,8 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts } from '../theme/colors';
 import { termLabel, useStudentData } from '../lib/studentApi';
 import type { ClassDetail, OutlineItem } from '../lib/studentApi';
-import { BackHeader, ErrorView, Loading, ProgressBar, Tabs, Tag } from '../components/ui';
+import { BackHeader, ErrorView, Grid, Loading, ProgressBar, Tabs, Tag } from '../components/ui';
+import { widePage } from '../lib/responsive';
 import { kindLabel, statusLine } from '../lib/assessmentApi';
 import type { AssessmentSummary } from '../lib/assessmentApi';
 
@@ -69,7 +70,7 @@ export default function ModuleChapterScreen({ navigation, route }: Props) {
         ]}
       />
       {tab !== 'lessons' ? (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView contentContainerStyle={[styles.list, widePage]}>
           <AssessmentList
             items={tab === 'exams' ? exams : quizzes}
             empty={tab === 'exams' ? "Your instructor hasn't posted any exams yet." : "Your instructor hasn't posted any quizzes yet. Chapter quizzes are under Lessons."}
@@ -77,7 +78,7 @@ export default function ModuleChapterScreen({ navigation, route }: Props) {
           />
         </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView contentContainerStyle={[styles.list, widePage]}>
           {data.modules.length === 0 && <Text style={styles.empty}>Your instructor hasn't published any lessons for this subject yet.</Text>}
           {data.modules.map((mod, mi) => (
             <View key={mod.id} style={{ gap: 10 }}>
@@ -93,6 +94,7 @@ export default function ModuleChapterScreen({ navigation, route }: Props) {
                 )}
               </View>
 
+              <Grid minItem={440}>
               {mod.chapters.map((ch, ci) => (
                 <View key={ch.id} style={[styles.chapterCard, ch.locked && styles.chapterLocked]}>
                   <View style={styles.chapterTop}>
@@ -149,6 +151,7 @@ export default function ModuleChapterScreen({ navigation, route }: Props) {
                   {!ch.locked && ch.items.length === 0 && <Text style={styles.noItems}>No lessons in this chapter yet.</Text>}
                 </View>
               ))}
+              </Grid>
             </View>
           ))}
         </ScrollView>

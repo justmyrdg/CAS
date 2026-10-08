@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiError } from '../utils/ApiError';
 import * as imagesService from '../services/lessonImages.service';
+import { storage } from '../config/storage';
 
 // Uploads arrive as the raw request body (express.raw on the route); the original
 // file name comes in the query string, exactly like AR model uploads.
@@ -17,10 +18,9 @@ export const upload = asyncHandler(async (req: Request, res: Response) => {
 
 // Public (ids are unguessable UUIDs): <img> tags and the phone load it by URL without a bearer token.
 export const download = asyncHandler(async (req: Request, res: Response) => {
-  const { filePath, mimeType } = await imagesService.fileForDownload(req.params.id as string);
+  const { storedName, mimeType } = await imagesService.fileForDownload(req.params.id as string);
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-  res.type(mimeType).sendFile(filePath, (err) => {
-    if (err && !res.headersSent) res.status(404).json({ error: 'Image file is missing' });
-  });
+  res.type(mimeType);
+  await storage.send(res, 'images', storedName, 'Image file is missing');
 });

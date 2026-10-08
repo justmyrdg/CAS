@@ -1,17 +1,15 @@
 import { randomUUID } from 'crypto';
-import { mkdir, readFile, rm, writeFile } from 'fs/promises';
-import path from 'path';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import { storage } from '../config/storage';
 import { ApiError } from '../utils/ApiError';
 import { convertToGlb } from '../utils/modelConversion';
 import { presentHotspots } from '../utils/arHotspots';
 import { removeTriggerFilesFor } from './arTriggers.service';
 import type { Hotspot } from '../utils/arHotspots';
 
-// Uploaded 3D models live on disk in backend/uploads/ar (same path from src/ under
-// tsx and from dist/ when built), with metadata in the ar_models table.
-export const AR_UPLOAD_DIR = path.resolve(__dirname, '../../uploads/ar');
+// Uploaded 3D models are kept by the file storage (config/storage: backend/uploads/ar or Cloudinary),
+// with metadata in the ar_models table.
 export const MAX_AR_BYTES = 50 * 1024 * 1024;
 
 const GLB_MIME = 'model/gltf-binary';
@@ -23,15 +21,13 @@ async function prepareModelFile(fileName: string, data: Buffer) {
 }
 
 async function storeFile(ext: string, data: Buffer) {
-  await mkdir(AR_UPLOAD_DIR, { recursive: true });
   const storedName = `${randomUUID()}${ext}`;
-  await writeFile(path.join(AR_UPLOAD_DIR, storedName), data);
+  await storage.save('ar', storedName, data);
   return storedName;
 }
 
 async function removeFile(storedName: string) {
-  // path.basename guards against anything but a plain file name reaching rm().
-  await rm(path.join(AR_UPLOAD_DIR, path.basename(storedName)), { force: true });
+  await storage.remove('ar', storedName);
 }
 
 const withCounts = { subject: { select: { code: true, name: true } }, _count: { select: { lessons: true } } } as const;
@@ -113,7 +109,7 @@ export async function replaceArFile(id: string, fileName: string, upload: Buffer
 // Re-runs the upload conversion on a stored file (scripts/convertArModels.ts, for models uploaded before it existed).
 export async function reconvertStoredModel(id: string) {
   const existing = await findOrThrow(id);
-  const current = await readFile(path.join(AR_UPLOAD_DIR, path.basename(existing.storedName)));
+  const current = await storage.read('ar', existing.storedName);
   const { ext, mimeType, data } = await prepareModelFile(existing.storedName, current);
   const storedName = await storeFile(ext, data);
   await prisma.arModel.update({ where: { id }, data: { storedName, mimeType, sizeBytes: data.length } });
@@ -151,11 +147,11 @@ export async function listArModels({
   return { models: models.map(serializeArModel), total };
 }
 
-// Where the file is on disk, for the download route.
+// The stored file's name and type, for the download route.
 export async function fileForDownload(id: string) {
   const model = await prisma.arModel.findUnique({ where: { id }, select: { storedName: true, mimeType: true, fileName: true } });
   if (!model) throw ApiError.notFound('AR model not found');
-  return { filePath: path.join(AR_UPLOAD_DIR, path.basename(model.storedName)), mimeType: model.mimeType, fileName: model.fileName };
+  return model;
 }
 
 async function studentSubjectIds(studentId: string) {

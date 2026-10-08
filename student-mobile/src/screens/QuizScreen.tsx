@@ -8,7 +8,7 @@ import { colors, fonts } from '../theme/colors';
 import { apiRequest, errorText } from '../lib/api';
 import { useStudentData } from '../lib/studentApi';
 import type { Quiz, QuizResult } from '../lib/studentApi';
-import { ErrorView, Loading, PrimaryButton, ProgressBar, SecondaryButton } from '../components/ui';
+import { Column, ErrorView, Loading, PrimaryButton, ProgressBar, SecondaryButton } from '../components/ui';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Quiz'>;
 
@@ -212,7 +212,7 @@ function Screen({ children }: { children: ReactNode }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.white }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {children}
+        <Column>{children}</Column>
       </SafeAreaView>
     </View>
   );

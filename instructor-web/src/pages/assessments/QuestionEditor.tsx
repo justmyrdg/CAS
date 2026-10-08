@@ -6,12 +6,12 @@ import type { Question } from './assessmentTypes';
 const LETTERS = 'ABCDEFGH';
 const small: CSSProperties = { ...inputStyle, padding: '8px 10px', fontSize: 13 };
 
-function IconButton({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
+function IconButton({ label, disabledReason, onClick, disabled, children }: { label: string; disabledReason?: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
       aria-label={label}
-      title={label}
+      title={disabled && disabledReason ? disabledReason : label}
       disabled={disabled}
       onClick={onClick}
       style={{
@@ -53,7 +53,7 @@ function TextList({ values, min, max, placeholder, addLabel, onChange }: { value
         <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ width: 22, fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{i + 1}.</span>
           <input value={v} placeholder={placeholder(i)} onChange={(e) => onChange(values.map((x, j) => (j === i ? e.target.value : x)))} style={small} />
-          <IconButton label="Remove" disabled={values.length <= min} onClick={() => onChange(values.filter((_, j) => j !== i))}>
+          <IconButton label="Remove" disabledReason={`Needs at least ${min}`} disabled={values.length <= min} onClick={() => onChange(values.filter((_, j) => j !== i))}>
             ✕
           </IconButton>
         </div>
@@ -99,7 +99,7 @@ export default function QuestionEditor({
         };
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={fieldLabelStyle}>Choices — {multi ? 'tick every correct one' : 'select the correct one'}</span>
+            <span style={fieldLabelStyle}>Choices (at least 2) — {multi ? 'tick every correct one' : 'select the correct one'}</span>
             {q.choices.map((c, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
@@ -116,7 +116,7 @@ export default function QuestionEditor({
                   onChange={(e) => onChange({ ...q, choices: q.choices.map((x, j) => (j === i ? e.target.value : x)) } as Question)}
                   style={{ ...small, borderColor: isCorrect(i) ? 'var(--primary)' : undefined }}
                 />
-                <IconButton label={`Remove choice ${LETTERS[i]}`} disabled={q.choices.length <= 2} onClick={() => remove(i)}>
+                <IconButton label={`Remove choice ${LETTERS[i]}`} disabledReason="Needs at least 2 choices" disabled={q.choices.length <= 2} onClick={() => remove(i)}>
                   ✕
                 </IconButton>
               </div>
@@ -150,7 +150,7 @@ export default function QuestionEditor({
       case 'ENUMERATION':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={fieldLabelStyle}>Answers ({q.answers.length}) — students get a share of the points for each one</span>
+            <span style={fieldLabelStyle}>Answers ({q.answers.length}, at least 2) — students get a share of the points for each one</span>
             <TextList values={q.answers} min={2} max={20} placeholder={(i) => `Answer ${i + 1}`} addLabel="+ Add answer" onChange={(answers) => onChange({ ...q, answers })} />
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer' }}>
               <input type="checkbox" checked={q.ordered} onChange={(e) => onChange({ ...q, ordered: e.target.checked })} />
@@ -161,7 +161,7 @@ export default function QuestionEditor({
       case 'MATCHING':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={fieldLabelStyle}>Pairs — students see the matches shuffled</span>
+            <span style={fieldLabelStyle}>Pairs (at least 2) — students see the matches shuffled</span>
             {q.pairs.map((pair, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span style={{ width: 22, fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{i + 1}.</span>
@@ -178,7 +178,7 @@ export default function QuestionEditor({
                   onChange={(e) => onChange({ ...q, pairs: q.pairs.map((x, j) => (j === i ? { ...x, right: e.target.value } : x)) })}
                   style={small}
                 />
-                <IconButton label="Remove pair" disabled={q.pairs.length <= 2} onClick={() => onChange({ ...q, pairs: q.pairs.filter((_, j) => j !== i) })}>
+                <IconButton label="Remove pair" disabledReason="Needs at least 2 pairs" disabled={q.pairs.length <= 2} onClick={() => onChange({ ...q, pairs: q.pairs.filter((_, j) => j !== i) })}>
                   ✕
                 </IconButton>
               </div>

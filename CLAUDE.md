@@ -32,6 +32,12 @@ Student app (`cd student-mobile`): `npm run web` / `npm start`. It has no script
 
 Login is rate-limited, so repeated failed logins during testing will lock you out for a while.
 
+First-time backend setup: `cp .env.example .env` (set `DATABASE_URL` and the two JWT secrets, which must differ), then `npm install`, `npm run prisma:migrate`, `npm run seed`. Env vars are validated by zod in `src/config/env.ts`. Production applies migrations with `npm run prisma:deploy`, not `prisma:migrate`. Production must set `STORAGE_DRIVER=cloudinary` and `CLOUDINARY_URL`, because the host's disk is wiped on every deploy.
+
+## Deployment
+
+The web portals and the student app's web export each have a `vercel.json` with an SPA rewrite. The student web build is `npx expo export --platform web`. `student-mobile/eas.json` has an Android `preview` APK profile that bakes in `EXPO_PUBLIC_API_URL` pointing at the hosted backend (Render). `student-mobile/app.json` declares the Android package and camera permission, which the AR image tracking needs.
+
 ## Backend architecture
 
 - The layers are strict: `routes/` → `controllers/` (thin, request/response only) → `services/` (business logic and the **only** layer that calls Prisma). Validate requests with zod through `middlewares/validate.ts`. Throw `utils/ApiError` and wrap handlers in `asyncHandler`.
@@ -46,12 +52,13 @@ Login is rate-limited, so repeated failed logins during testing will lock you ou
   - `classAnalytics.service.ts` (instructor) and `adminOverview.service.ts` (admin dashboard) aggregate these.
   
   Keep the math in pure utils so it can be unit-tested.
-- AR: uploaded models are converted to self-contained GLB (`utils/modelConversion.ts`) and stored under `backend/uploads/` along with lesson images and trigger pictures. Points of interest are in `utils/arHotspots.ts`. Static AR marker files are served from `backend/assets/ar-marker`.
+- AR: uploaded models are converted to self-contained GLB (`utils/modelConversion.ts`) and kept, along with lesson images and trigger pictures, by the file storage in `config/storage.ts`. Services call `storage.save/read/remove/send` and never touch `uploads/` directly. `STORAGE_DRIVER=local` (default) uses `backend/uploads/`, `cloudinary` uses Cloudinary (needs `CLOUDINARY_URL`). Files are addressed by the stored name in the DB, so switching needs no DB change: `npm run storage:migrate` (`-- --dry` to preview) copies the existing files up. Points of interest are in `utils/arHotspots.ts`. Static AR marker files are served from `backend/assets/ar-marker`.
 
 ## Clients
 
 - The three clients share **no code**. Types and helpers such as API types, lesson block renderers and charts are duplicated per app. When you change a backend response shape, update each consuming client by hand. For example, analytics changes usually touch `admin-web`, `instructor-web/src/data/classAnalytics.ts` and `student-mobile/src/lib/studentApi.ts`.
 - Each web portal has `lib/apiClient.ts` (base URL from `VITE_API_URL`), `state/AuthContext.tsx` and hand-rolled UI in `components/ui.tsx` and `components/charts.tsx`.
+- The student app is responsive (phone under 600px, tablet 600-1023, desktop 1024+). `src/lib/responsive.ts` has the breakpoints and the centred `widePage`/`narrowPage` content columns. `Column` (reading screens) and `Grid` (cards) are in `components/ui.tsx`, and `MainTabs` switches to a left sidebar on desktop. Use these on new screens instead of fixed widths.
 - The student app's AR viewer runs HTML pages built as strings in `src/lib/arPages.ts` (model-viewer, and MindAR + three.js for image tracking) inside a WebView, or an iframe on web.
 
 ## UI conventions

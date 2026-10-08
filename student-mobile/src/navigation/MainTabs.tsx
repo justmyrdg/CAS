@@ -5,6 +5,7 @@ import type { NavigationProp } from '@react-navigation/native';
 import type { MainTabParamList, RootStackParamList } from './types';
 import TabIcon from '../components/TabIcon';
 import { colors, fonts } from '../theme/colors';
+import { useLayout } from '../lib/responsive';
 import ClassListScreen from '../screens/ClassListScreen';
 import ProgressScreen from '../screens/ProgressScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -48,15 +49,21 @@ function ScanButton({ onPress, accessibilityState }: BottomTabBarButtonProps) {
   );
 }
 
+// Phone and tablet: the bar along the bottom with the raised scan button. Desktop: a plain sidebar on the left.
 export default function MainTabs() {
+  const { isDesktop } = useLayout();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
+        tabBarPosition: isDesktop ? 'left' : 'bottom',
+        tabBarVariant: isDesktop ? 'material' : 'uikit',
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textFaint,
-        tabBarStyle: { height: 64, borderTopColor: colors.border, overflow: 'visible' },
-        tabBarLabelStyle: { fontFamily: fonts.bodyMedium, fontSize: 11 },
+        tabBarInactiveTintColor: isDesktop ? colors.textMuted : colors.textFaint,
+        tabBarStyle: isDesktop
+          ? { width: 220, minWidth: 220, backgroundColor: colors.white, borderRightColor: colors.border, borderRightWidth: 1 }
+          : { height: 64, borderTopColor: colors.border, overflow: 'visible' },
+        tabBarLabelStyle: { fontFamily: fonts.bodyMedium, fontSize: isDesktop ? 13 : 11 },
         tabBarIcon: ({ color }) => <TabIcon name={ICONS[route.name]} color={color} />,
         tabBarLabel: LABELS[route.name],
       })}
@@ -66,7 +73,7 @@ export default function MainTabs() {
       <Tab.Screen
         name="Scan"
         component={ScanPlaceholder}
-        options={{ tabBarButton: (props) => <ScanButton {...props} /> }}
+        options={isDesktop ? undefined : { tabBarButton: (props) => <ScanButton {...props} /> }}
         listeners={({ navigation }) => ({
           tabPress: (e) => {
             e.preventDefault();

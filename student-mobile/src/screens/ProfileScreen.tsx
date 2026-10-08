@@ -9,6 +9,7 @@ import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { colors, fonts } from '../theme/colors';
 import { useAuth } from '../state/AuthContext';
 import { AppHeader, Card } from '../components/ui';
+import { narrowPage } from '../lib/responsive';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Profile'>,
@@ -49,8 +50,8 @@ export default function ProfileScreen({ navigation }: Props) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.primary }} edges={['top']}>
-        <AppHeader title="Profile" />
-        <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={styles.body}>
+        <AppHeader title="Profile" narrow />
+        <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={[styles.body, narrowPage]}>
           <Card style={styles.identity}>
             <View style={styles.avatar}>
               <Text style={styles.avatarLabel}>{initials}</Text>

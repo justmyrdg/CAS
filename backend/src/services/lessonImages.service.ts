@@ -1,13 +1,12 @@
 import { randomUUID } from 'crypto';
-import { mkdir, rm, writeFile } from 'fs/promises';
 import path from 'path';
 import { prisma } from '../config/prisma';
+import { storage } from '../config/storage';
 import { ApiError } from '../utils/ApiError';
 import { imageFileUrl, imageIdsIn } from '../utils/lessonBlocks';
 
-// Images for lesson image blocks live on disk in backend/uploads/images (same path from src/ under tsx
-// and from dist/ when built), with metadata in lesson_images. Lessons reference them by id in their blocks.
-export const IMAGE_UPLOAD_DIR = path.resolve(__dirname, '../../uploads/images');
+// Images for lesson image blocks are kept by the file storage (config/storage: backend/uploads/images or Cloudinary),
+// with metadata in lesson_images. Lessons reference them by id in their blocks.
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
@@ -37,8 +36,7 @@ export function validateImageFile(fileName: string, data: Buffer) {
 }
 
 async function removeFile(storedName: string) {
-  // path.basename guards against anything but a plain file name reaching rm().
-  await rm(path.join(IMAGE_UPLOAD_DIR, path.basename(storedName)), { force: true });
+  await storage.remove('images', storedName);
 }
 
 // Runs a post-commit cleanup step without letting it fail a request whose DB change already
@@ -53,9 +51,8 @@ export async function cleanupQuietly(work: Promise<unknown>) {
 
 export async function createImage(fileName: string, data: Buffer) {
   const { ext, mimeType } = validateImageFile(fileName, data);
-  await mkdir(IMAGE_UPLOAD_DIR, { recursive: true });
   const storedName = `${randomUUID()}${ext}`;
-  await writeFile(path.join(IMAGE_UPLOAD_DIR, storedName), data);
+  await storage.save('images', storedName, data);
   try {
     const image = await prisma.lessonImage.create({ data: { fileName, storedName, mimeType, sizeBytes: data.length } });
     return { id: image.id, url: imageFileUrl(image.id) };
@@ -113,5 +110,5 @@ export async function pruneOrphanImages() {
 export async function fileForDownload(id: string) {
   const image = await prisma.lessonImage.findUnique({ where: { id }, select: { storedName: true, mimeType: true } });
   if (!image) throw ApiError.notFound('Image not found');
-  return { filePath: path.join(IMAGE_UPLOAD_DIR, path.basename(image.storedName)), mimeType: image.mimeType };
+  return image;
 }

@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from 'crypto';
-import { mkdir, readFile, rm, stat, writeFile } from 'fs/promises';
+import { readFile, stat } from 'fs/promises';
 import path from 'path';
 import { decode, encode } from '@msgpack/msgpack';
 import { prisma } from '../config/prisma';
+import { storage } from '../config/storage';
 import { ApiError } from '../utils/ApiError';
 import { detectImageType } from './lessonImages.service';
 
@@ -10,7 +11,8 @@ import { detectImageType } from './lessonImages.service';
 // The admin's browser compiles each one with MindAR's compiler; we store the image and its tracking data, and merge
 // every picture's data with the shared printed marker into the single target file the AR page loads.
 
-export const AR_TRIGGER_DIR = path.resolve(__dirname, '../../uploads/ar-triggers');
+// The pictures and their tracking data are kept by the file storage (config/storage). The shared printed marker is a
+// static file shipped with the code.
 const MARKER_TARGET = path.resolve(__dirname, '../../assets/ar-marker/marker.mind');
 export const MAX_TRIGGERS_PER_MODEL = 10;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
@@ -50,12 +52,10 @@ export async function addTrigger(arModelId: string, image: Buffer, target: Buffe
   const mind = parseMind(target);
   const { width, height } = mind.dataList[0].targetImage;
 
-  await mkdir(AR_TRIGGER_DIR, { recursive: true });
   const base = randomUUID();
   const imageName = `${base}${type.ext}`; // ext includes the dot
   const targetName = `${base}.mind`;
-  await writeFile(path.join(AR_TRIGGER_DIR, imageName), image);
-  await writeFile(path.join(AR_TRIGGER_DIR, targetName), target);
+  await Promise.all([storage.save('ar-triggers', imageName, image), storage.save('ar-triggers', targetName, target)]);
   try {
     const created = await prisma.arTrigger.create({ data: { arModelId, imageName, targetName, width, height } });
     targetsCache = null;
@@ -67,7 +67,7 @@ export async function addTrigger(arModelId: string, image: Buffer, target: Buffe
 }
 
 async function removeFiles(t: { imageName: string; targetName: string }) {
-  await Promise.all([t.imageName, t.targetName].map((name) => rm(path.join(AR_TRIGGER_DIR, path.basename(name)), { force: true })));
+  await Promise.all([t.imageName, t.targetName].map((name) => storage.remove('ar-triggers', name)));
 }
 
 export async function deleteTrigger(arModelId: string, triggerId: string) {
@@ -85,10 +85,10 @@ export async function removeTriggerFilesFor(arModelId: string) {
   targetsCache = null;
 }
 
-export async function triggerImageFile(id: string) {
+export async function triggerImageName(id: string) {
   const trigger = await prisma.arTrigger.findUnique({ where: { id }, select: { imageName: true } });
   if (!trigger) throw ApiError.notFound('Trigger picture not found');
-  return path.join(AR_TRIGGER_DIR, path.basename(trigger.imageName));
+  return trigger.imageName;
 }
 
 // ---------- The AR page's targets: marker first, then every trigger picture ----------
@@ -115,7 +115,7 @@ export async function getTargets(): Promise<Targets> {
   const models: (string | null)[] = marker.dataList.map(() => null);
   for (const t of triggers) {
     try {
-      const mind = decode(await readFile(path.join(AR_TRIGGER_DIR, path.basename(t.targetName)))) as MindFile;
+      const mind = decode(await storage.read('ar-triggers', t.targetName)) as MindFile;
       dataList.push(...mind.dataList);
       models.push(...mind.dataList.map(() => t.arModelId));
     } catch {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiError } from '../utils/ApiError';
 import * as arService from '../services/arModels.service';
+import { storage } from '../config/storage';
 import { hotspotsInputSchema } from '../utils/arHotspots';
 
 export { hotspotsInputSchema };
@@ -90,12 +91,11 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
 // Public download (ids are unguessable UUIDs); served without auth because the
 // 3D viewer loads it by URL and can't attach a bearer token.
 export const download = asyncHandler(async (req: Request, res: Response) => {
-  const { filePath, mimeType, fileName } = await arService.fileForDownload(param(req));
+  const { storedName, mimeType, fileName } = await arService.fileForDownload(param(req));
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   // Stored files are always converted .glb, whatever was uploaded (e.g. a .zip).
   const servedName = mimeType === 'model/gltf-binary' ? fileName.replace(/\.[^.]+$/, '') + '.glb' : fileName;
   res.setHeader('Content-Disposition', `inline; filename="${servedName.replace(/"/g, '')}"`);
-  res.type(mimeType).sendFile(filePath, (err) => {
-    if (err && !res.headersSent) res.status(404).json({ error: 'Model file is missing' });
-  });
+  res.type(mimeType);
+  await storage.send(res, 'ar', storedName, 'Model file is missing');
 });

@@ -6,9 +6,10 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { colors, fonts } from '../theme/colors';
+import { widePage } from '../lib/responsive';
 import { termLabel, useStudentData } from '../lib/studentApi';
 import type { ClassSummary, Progress } from '../lib/studentApi';
-import { AppHeader, ErrorView, HeaderButton, Loading, PrimaryButton, ProgressBar, StatTile, Tabs, Tag } from '../components/ui';
+import { AppHeader, ErrorView, Grid, HeaderButton, Loading, PrimaryButton, ProgressBar, StatTile, Tabs, Tag } from '../components/ui';
 import { RecommendationsCard } from '../components/Insights';
 
 type Props = CompositeScreenProps<
@@ -46,7 +47,7 @@ export default function ClassListScreen({ navigation }: Props) {
             <ErrorView message={error} onRetry={() => void reload()} />
           ) : (
             <ScrollView
-              contentContainerStyle={styles.list}
+              contentContainerStyle={[styles.list, widePage]}
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
@@ -85,6 +86,7 @@ export default function ClassListScreen({ navigation }: Props) {
                 </View>
               )}
 
+              <Grid>
               {classes.map((c) => (
                 <Pressable
                   key={c.id}
@@ -110,6 +112,7 @@ export default function ClassListScreen({ navigation }: Props) {
                   </Text>
                 </Pressable>
               ))}
+              </Grid>
             </ScrollView>
           )}
         </View>

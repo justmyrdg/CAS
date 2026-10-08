@@ -5,12 +5,14 @@ import Svg, { Path } from 'react-native-svg';
 import { colors, fonts } from '../theme/colors';
 import { useAuth } from '../state/AuthContext';
 import { errorText } from '../lib/api';
+import { useLayout } from '../lib/responsive';
 
 const SR_CODE = /^\d{2}-\d{5}$/;
 
 // Signing in swaps the navigator to the app (see RootNavigator), so there's no navigate() here.
 export default function LoginScreen() {
   const { login } = useAuth();
+  const { isDesktop } = useLayout();
   const [srCode, setSrCode] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -38,12 +40,14 @@ export default function LoginScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.white }}>
       <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.hero}>
             <Text style={styles.wordmark}>CogniView AR</Text>
             <Text style={styles.heroLabel}>Student</Text>
           </View>
-          <View style={styles.sheet}>
+          {/* Phone and tablet: a rounded sheet under the green block. Desktop: a white panel beside it. */}
+          <View style={isDesktop ? styles.panel : styles.sheet}>
+          <View style={styles.form}>
             <Text style={styles.label}>SR Code</Text>
             <TextInput
               value={srCode}
@@ -99,6 +103,7 @@ export default function LoginScreen() {
 
             <Text style={styles.footer}>Trouble signing in? Contact your Dean's Office</Text>
           </View>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
@@ -149,6 +154,9 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 28,
   },
+  panel: { flex: 1, backgroundColor: colors.white, justifyContent: 'center', padding: 40 },
+  // Keeps the fields a comfortable width on a tablet or desktop.
+  form: { width: '100%', maxWidth: 420, alignSelf: 'center' },
   label: { fontFamily: fonts.bodySemibold, fontSize: 13, color: colors.text, marginBottom: 8 },
   input: {
     borderWidth: 1,

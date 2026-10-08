@@ -7,7 +7,7 @@ import { colors, fonts } from '../theme/colors';
 import { apiRequest, errorText } from '../lib/api';
 import { useStudentData } from '../lib/studentApi';
 import type { Lesson, LessonBlock } from '../lib/studentApi';
-import { BackHeader, ErrorView, Loading, PrimaryButton } from '../components/ui';
+import { BackHeader, Column, ErrorView, Loading, PrimaryButton } from '../components/ui';
 import { HeadingBlock, TextBlock } from '../components/lessonBlocks/TextBlocks';
 import ImageBlock from '../components/lessonBlocks/ImageBlock';
 import VideoBlock from '../components/lessonBlocks/VideoBlock';
@@ -68,6 +68,7 @@ export default function LessonScreen({ navigation, route }: Props) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.white }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <Column>
         <BackHeader crumb={crumb} title={lesson?.title ?? 'Lesson'} onBack={() => navigation.goBack()}>
           {lesson?.completedAt && <Text style={styles.doneNote}>✓ You've completed this lesson</Text>}
         </BackHeader>
@@ -101,6 +102,7 @@ export default function LessonScreen({ navigation, route }: Props) {
             </View>
           </>
         )}
+        </Column>
       </SafeAreaView>
     </View>
   );

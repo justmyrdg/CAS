@@ -44,6 +44,17 @@ All routes under `/api/admin/accounts` require a valid access token for an **act
 
 There's no self-service signup: the very first ADMIN comes from `npm run seed` (reads `SEED_ADMIN_EMAIL` / `SEED_ADMIN_NAME` / `SEED_ADMIN_EMPLOYEE_ID`; every seeded account uses the password `CogniView2026!`), and every account after that is created by an already-authenticated ADMIN/DEAN through the API above.
 
+## File storage
+
+Uploaded AR models, AR trigger pictures and lesson images go through `src/config/storage.ts`, chosen by `STORAGE_DRIVER` in `.env`:
+
+- `local` (default): files are written to `backend/uploads/{ar,ar-triggers,images}`. Fine for development; a production host such as Render loses them on every deploy.
+- `cloudinary`: files are uploaded to Cloudinary as raw resources under `<CLOUDINARY_FOLDER>/{ar,ar-triggers,images}/<stored name>`. Set `CLOUDINARY_URL` (the "API environment variable" from the Cloudinary dashboard). Downloads still go through this API (`/api/ar-models/:id/file` etc.), so the apps and URLs don't change.
+
+Files are addressed by the stored name already in the database, so switching drivers needs no migration of rows. To move existing files up, set `CLOUDINARY_URL`, run `npm run storage:migrate -- --dry` to preview, then `npm run storage:migrate`, then set `STORAGE_DRIVER=cloudinary` in the production environment.
+
+Cloudinary's plan limits apply to raw files (the free plan allows far less than this app's 50 MB model limit), so check your plan if a large model upload is rejected.
+
 ## CORS
 
 `CORS_ORIGINS` in `.env` is a comma-separated allowlist. Requests with no `Origin` header (native mobile clients, curl) are allowed through; browser requests from an origin not on the list get a `403`. `credentials: true` is enabled so the refresh-token cookie works for the two web apps; update `CORS_ORIGINS` when a frontend's dev port or production domain changes.

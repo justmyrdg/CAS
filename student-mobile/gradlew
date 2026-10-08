@@ -1,0 +1,7 @@
+      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND
+     2685    2046    2685      10756  cons1     197609 17:12:20 /c/Program Files/nodejs/node
+     2046       1    2046       4796  cons1     197609 16:11:30 /usr/bin/bash
+     2800    2692    2800       5336  cons2     197609 17:13:01 /c/Windows/System32/WindowsPowerShell/v1.0/powershell
+     1986       1    1986      19764  cons0     197609 16:10:06 /usr/bin/bash
+     2692       1    2692      13716  cons2     197609 17:12:47 /usr/bin/bash
+     2805       1    2800      15100  cons2     197609 17:13:41 /usr/bin/ps
