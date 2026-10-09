@@ -8,7 +8,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { colors, fonts } from '../theme/colors';
 import { termLabel, useStudentData } from '../lib/studentApi';
 import type { ClassDetail, OutlineItem } from '../lib/studentApi';
-import { BackHeader, ErrorView, Grid, Loading, ProgressBar, Tabs, Tag } from '../components/ui';
+import { usePageBg, BackHeader, ErrorView, Grid, Loading, ProgressBar, Tabs, Tag } from '../components/ui';
 import { widePage } from '../lib/responsive';
 import { kindLabel, statusLine } from '../lib/assessmentApi';
 import type { AssessmentSummary } from '../lib/assessmentApi';
@@ -206,13 +206,14 @@ function Shell({
   header?: ReactNode;
   children: ReactNode;
 }) {
+  const pageBg = usePageBg();
   return (
     <View style={{ flex: 1, backgroundColor: colors.white }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <BackHeader crumb={crumb} title={title} onBack={onBack}>
           {header}
         </BackHeader>
-        <View style={{ flex: 1, backgroundColor: colors.bg }}>{children}</View>
+        <View style={{ flex: 1, backgroundColor: pageBg }}>{children}</View>
       </SafeAreaView>
     </View>
   );

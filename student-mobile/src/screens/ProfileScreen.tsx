@@ -8,7 +8,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { colors, fonts } from '../theme/colors';
 import { useAuth } from '../state/AuthContext';
-import { AppHeader, Card } from '../components/ui';
+import { AppHeader, Card, usePageBg } from '../components/ui';
 import { narrowPage } from '../lib/responsive';
 
 type Props = CompositeScreenProps<
@@ -39,6 +39,7 @@ function InfoRow({ label, value, last }: { label: string; value: string; last?: 
 }
 
 export default function ProfileScreen({ navigation }: Props) {
+  const pageBg = usePageBg();
   const { user, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
   if (!user) return null;
@@ -48,10 +49,10 @@ export default function ProfileScreen({ navigation }: Props) {
   const batch = user.srCode ? `20${user.srCode.slice(0, 2)}` : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: pageBg }}>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.primary }} edges={['top']}>
         <AppHeader title="Profile" narrow />
-        <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={[styles.body, narrowPage]}>
+        <ScrollView style={{ backgroundColor: pageBg }} contentContainerStyle={[styles.body, narrowPage]}>
           <Card style={styles.identity}>
             <View style={styles.avatar}>
               <Text style={styles.avatarLabel}>{initials}</Text>

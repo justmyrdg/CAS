@@ -12,6 +12,7 @@ import {
 } from '@expo-google-fonts/work-sans';
 import { useFonts as useSourceSerifFonts, SourceSerif4_700Bold } from '@expo-google-fonts/source-serif-4';
 import RootNavigator from './src/navigation/RootNavigator';
+import DesktopShell, { emitNavigationChange, navigationRef } from './src/navigation/DesktopShell';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -49,8 +50,10 @@ function AppContent() {
 
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <NavigationContainer>
-        <RootNavigator />
+      <NavigationContainer ref={navigationRef} onReady={emitNavigationChange} onStateChange={emitNavigationChange}>
+        <DesktopShell>
+          <RootNavigator />
+        </DesktopShell>
       </NavigationContainer>
       <StatusBar style="dark" />
     </View>

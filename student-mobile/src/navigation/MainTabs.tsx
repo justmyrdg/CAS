@@ -49,21 +49,18 @@ function ScanButton({ onPress, accessibilityState }: BottomTabBarButtonProps) {
   );
 }
 
-// Phone and tablet: the bar along the bottom with the raised scan button. Desktop: a plain sidebar on the left.
+// Phone and tablet: the bar along the bottom with the raised scan button.
+// Desktop: no bar here, the sidebar in DesktopShell does the navigating.
 export default function MainTabs() {
   const { isDesktop } = useLayout();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarPosition: isDesktop ? 'left' : 'bottom',
-        tabBarVariant: isDesktop ? 'material' : 'uikit',
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: isDesktop ? colors.textMuted : colors.textFaint,
-        tabBarStyle: isDesktop
-          ? { width: 220, minWidth: 220, backgroundColor: colors.white, borderRightColor: colors.border, borderRightWidth: 1 }
-          : { height: 64, borderTopColor: colors.border, overflow: 'visible' },
-        tabBarLabelStyle: { fontFamily: fonts.bodyMedium, fontSize: isDesktop ? 13 : 11 },
+        tabBarInactiveTintColor: colors.textFaint,
+        tabBarStyle: isDesktop ? { display: 'none' } : { height: 64, borderTopColor: colors.border, overflow: 'visible' },
+        tabBarLabelStyle: { fontFamily: fonts.bodyMedium, fontSize: 11 },
         tabBarIcon: ({ color }) => <TabIcon name={ICONS[route.name]} color={color} />,
         tabBarLabel: LABELS[route.name],
       })}
@@ -73,7 +70,7 @@ export default function MainTabs() {
       <Tab.Screen
         name="Scan"
         component={ScanPlaceholder}
-        options={isDesktop ? undefined : { tabBarButton: (props) => <ScanButton {...props} /> }}
+        options={{ tabBarButton: (props) => <ScanButton {...props} /> }}
         listeners={({ navigation }) => ({
           tabPress: (e) => {
             e.preventDefault();

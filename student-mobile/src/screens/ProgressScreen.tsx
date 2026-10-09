@@ -11,7 +11,7 @@ import { colors, fonts } from '../theme/colors';
 import { widePage } from '../lib/responsive';
 import { useStudentData } from '../lib/studentApi';
 import type { Progress } from '../lib/studentApi';
-import { AppHeader, Card, ErrorView, Loading, ProgressBar, SectionTitle, StatTile, Tag } from '../components/ui';
+import { usePageBg, AppHeader, Card, ErrorView, Loading, ProgressBar, SectionTitle, StatTile, Tag } from '../components/ui';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const SERIES = [
@@ -35,14 +35,15 @@ function useWidth() {
 }
 
 export default function ProgressScreen() {
+  const pageBg = usePageBg();
   const { data, error, loading, reload } = useStudentData<Progress>('/api/student/progress');
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: pageBg }}>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.primary }} edges={['top']}>
         <AppHeader title="My Progress" subtitle="Across all your classes" />
-        <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <View style={{ flex: 1, backgroundColor: pageBg }}>
           {loading ? (
             <Loading />
           ) : !data ? (

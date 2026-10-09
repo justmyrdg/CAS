@@ -9,7 +9,7 @@ import { colors, fonts } from '../theme/colors';
 import { widePage } from '../lib/responsive';
 import { termLabel, useStudentData } from '../lib/studentApi';
 import type { ClassSummary, Progress } from '../lib/studentApi';
-import { AppHeader, ErrorView, Grid, HeaderButton, Loading, PrimaryButton, ProgressBar, StatTile, Tabs, Tag } from '../components/ui';
+import { usePageBg, AppHeader, ErrorView, Grid, HeaderButton, Loading, PrimaryButton, ProgressBar, StatTile, Tabs, Tag } from '../components/ui';
 import { RecommendationsCard } from '../components/Insights';
 
 type Props = CompositeScreenProps<
@@ -18,6 +18,7 @@ type Props = CompositeScreenProps<
 >;
 
 export default function ClassListScreen({ navigation }: Props) {
+  const pageBg = usePageBg();
   const { data, error, loading, reload } = useStudentData<{ classes: ClassSummary[] }>('/api/student/classes');
   const { data: progress, reload: reloadProgress } = useStudentData<Progress>('/api/student/progress');
   const [tab, setTab] = useState<'active' | 'archived'>('active');
@@ -29,10 +30,10 @@ export default function ClassListScreen({ navigation }: Props) {
   const openJoin = () => navigation.navigate('JoinClass');
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: pageBg }}>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.primary }} edges={['top']}>
         <AppHeader title="My Classes" right={<HeaderButton label="+ Join class" onPress={openJoin} />} />
-        <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <View style={{ flex: 1, backgroundColor: pageBg }}>
           <Tabs
             value={tab}
             onChange={setTab}

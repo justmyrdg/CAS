@@ -39,16 +39,22 @@ export function BackHeader({
   );
 }
 
-// The flat green bar at the top of each tab screen.
+// Page background: cream on a phone or tablet, white next to the desktop sidebar (like the portals).
+export function usePageBg() {
+  return useLayout().isDesktop ? colors.white : colors.bg;
+}
+
+// The flat green bar at the top of each tab screen; on desktop a plain page title like the portals' PageHeader.
 // The bar is full width; its content lines up with the page column below it (`narrow` for the profile page).
 export function AppHeader({ title, subtitle, right, narrow }: { title: string; subtitle?: string; right?: ReactNode; narrow?: boolean }) {
+  const { isDesktop } = useLayout();
   return (
-    <View style={styles.appHeader}>
-      <View style={[styles.appHeaderInner, narrow ? narrowPage : widePage]}>
+    <View style={isDesktop ? styles.pageHeader : styles.appHeader}>
+      <View style={[styles.appHeaderInner, isDesktop && styles.pageHeaderInner, narrow ? narrowPage : widePage]}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.appHeaderTitle}>{title}</Text>
+          <Text style={[styles.appHeaderTitle, isDesktop && styles.pageHeaderTitle]}>{title}</Text>
           {subtitle && (
-            <Text style={styles.appHeaderSubtitle} numberOfLines={1}>
+            <Text style={[styles.appHeaderSubtitle, isDesktop && styles.pageHeaderSubtitle]} numberOfLines={1}>
               {subtitle}
             </Text>
           )}
@@ -64,8 +70,9 @@ export function AppHeader({ title, subtitle, right, narrow }: { title: string; s
 export function Column({ children }: { children: ReactNode }) {
   const { width } = useLayout();
   const bordered = width > READING_WIDTH;
+  const pageBg = usePageBg();
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: pageBg }}>
       <View
         style={{
           flex: 1,
@@ -100,10 +107,15 @@ export function Grid({ children, minItem = 340, gap = 12 }: { children: ReactNod
   );
 }
 
-// A small outlined button for the green header (e.g. "+ Join class").
+// A small outlined button for the green header (e.g. "+ Join class"); a solid green button on the desktop's white header.
 export function HeaderButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const { isDesktop } = useLayout();
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [styles.headerBtn, pressed && { opacity: 0.7 }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.headerBtn, isDesktop && styles.headerBtnSolid, pressed && { opacity: 0.7 }]}
+    >
       <Text style={styles.headerBtnLabel}>{label}</Text>
     </Pressable>
   );
@@ -233,8 +245,13 @@ const styles = StyleSheet.create({
   appHeader: { backgroundColor: colors.primary },
   appHeaderInner: { minHeight: 60, paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
   appHeaderTitle: { fontFamily: fonts.bodyBold, fontSize: 19, color: '#fff' },
+  pageHeader: { backgroundColor: colors.white },
+  pageHeaderInner: { minHeight: 0, paddingTop: 32, paddingBottom: 12 },
+  pageHeaderTitle: { fontSize: 22, color: colors.text },
+  pageHeaderSubtitle: { color: colors.textMuted },
   appHeaderSubtitle: { fontFamily: fonts.bodyMedium, fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
   headerBtn: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 8, paddingVertical: 7, paddingHorizontal: 12 },
+  headerBtnSolid: { backgroundColor: colors.primary, borderColor: colors.primary },
   headerBtnLabel: { fontFamily: fonts.bodySemibold, fontSize: 13, color: '#fff' },
   card: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 16 },
   sectionRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 12 },
